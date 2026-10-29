@@ -369,10 +369,10 @@ footer{margin-top:22px;color:var(--muted);font-size:11.5px;line-height:1.8;text-
 .log-card .log-date{color:var(--muted);font-size:12px;margin-bottom:10px}
 .log-card ol{margin:0;padding-left:18px}
 .log-group{margin:12px 0 4px;font-size:12.5px;color:var(--hot);font-weight:600;letter-spacing:.3px}
-.log-card .log-group:first-of-type{margin-top:2px}
 .log-group .lg-b{color:var(--ink);font-weight:400;letter-spacing:0}
-/* 單條並入組名後是一句完整的話，整行不加粗；組名僅靠顏色區分 */
 .log-group.log-one{font-weight:400;color:var(--ink)}
+.log-card .log-group:first-of-type{margin-top:2px}
+/* 單條並入組名後是一句完整的話，整行不加粗；組名僅靠顏色區分 */
 .log-card li{font-size:13px;line-height:1.7;margin-bottom:6px;color:var(--ink)}
 .log-title{font-size:16px;font-weight:600;margin:0 0 12px}
 .log-card.ack{background:rgba(134,108,181,0.06);border:1px solid rgba(134,108,181,0.25)}
@@ -3649,10 +3649,12 @@ function renderLog(){
   let h = '<h3 class="log-title">' + (UI[lang].log_title || '更新記錄') + '</h3>';
   cl.forEach(v=>{
     h += '<div class="log-card"><h3>' + esc(v.ver) + '</h3><div class="log-date">' + esc(v.date) + '</div>';
+    const _multi = (v.groups || []).some(function(g){ return g.items.length > 1; });
     if (v.groups){
       v.groups.forEach(function(g){
-        if (g.items.length === 1){
-          /* 單條並入組名，讀作「組名：條目」（v1.3.3 起；多條仍是「組名 + 列表」） */
+        /* 本版全部是單條 → 一律並入組名（緊湊）；
+           只要有任一組多條 → 整版走「組名 + 列表」，避免同卡片內兩種排版混排 */
+        if (!_multi){
           h += '<h4 class="log-group log-one">' + esc(g.g) + '<span class="lg-b">：' + esc(g.items[0]) + '</span></h4>';
         } else {
           h += '<h4 class="log-group">' + esc(g.g) + '</h4><ol>';
