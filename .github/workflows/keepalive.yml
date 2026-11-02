@@ -1,0 +1,26 @@
+name: wish-keepalive
+
+# 目的：Supabase 免费档「7 天无活动即暂停项目」，这里每 3 天调一次聚合函数保活。
+# 同时兼作健康检查：请求失败会让本 workflow 变红并触发 GitHub 邮件通知。
+# 说明：此处的 key 是 Supabase 的 publishable key，本就公开在站点 HTML 里，
+#       权限由数据库 RLS 决定（匿名只能 INSERT、只能通过 wish_top 读聚合）。
+
+on:
+  schedule:
+    - cron: '0 3 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call wish_top
+        run: |
+          set -euo pipefail
+          resp=$(curl -sS --fail-with-body -m 30 \
+            -X POST 'https://jgvtvciwahhrkrrbommj.supabase.co/rest/v1/rpc/wish_top' \
+            -H "apikey: sb_publishable_Sl6EztJOqUbgoOm6jYvCgg_tMWAEYWu" \
+            -H 'Content-Type: application/json' \
+            -d '{"lim":5}')
+          echo "response: $resp"
+          echo "keepalive ok at $(date -u +%FT%TZ)"
