@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh"><head><meta charset="utf-8"><title>nocors probe</title></head>
+<body>
+<pre id="o">running…</pre>
+<script>
+var EP = 'https://my-live-chart.app.workbuddy.host/.cloud/database/rest/wishes';
+var KEY = 'wbpk_018ViedguliWmxg5imUr8p_7WBxPBTxA3IlICVsSnUwzoTTcGfojsZM';
+var R = [];
+function log(s){ R.push(s); document.getElementById('o').textContent = R.join('\n'); }
+
+function uid(){ return crypto.randomUUID(); }
+
+// 通道 1：no-cors fetch + query 鉴权 + text/plain（免预检）
+async function ch1(){
+  var body = JSON.stringify({gen_id: uid(), song_name: '__probe_ch1__'});
+  var url = EP + '?apikey=' + encodeURIComponent(KEY) + '&access_key=' + encodeURIComponent(KEY);
+  try{
+    var r = await fetch(url, {method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'text/plain'}, body: body});
+    log('ch1 sent, type=' + r.type + ' status=' + r.status);   // opaque 是预期
+  }catch(e){ log('ch1 ERROR ' + e.message); }
+}
+
+// 通道 2：sendBeacon（同样是 no-cors 简单请求）
+function ch2(){
+  var body = new Blob([JSON.stringify({gen_id: uid(), song_name: '__probe_ch2__'})], {type:'text/plain'});
+  var url = EP + '?apikey=' + encodeURIComponent(KEY);
+  try{ log('ch2 queued=' + navigator.sendBeacon(url, body)); }
+  catch(e){ log('ch2 ERROR ' + e.message); }
+}
+
+// 通道 3：隐藏 iframe 里的 form 提交（form-urlencoded）
+function ch3(){
+  var ifr = document.createElement('iframe');
+  ifr.name = 'ff'; ifr.style.display = 'none';
+  document.body.appendChild(ifr);
+  var f = document.createElement('form');
+  f.method = 'POST'; f.target = 'ff';
+  f.action = EP + '?apikey=' + encodeURIComponent(KEY);
+  f.enctype = 'application/x-www-form-urlencoded';
+  var d = {gen_id: uid(), song_name: '__probe_ch3__'};
+  Object.keys(d).forEach(function(k){
+    var i = document.createElement('input'); i.type='hidden'; i.name=k; i.value=d[k]; f.appendChild(i);
+  });
+  document.body.appendChild(f); f.submit();
+  log('ch3 submitted');
+}
+
+(async function(){
+  await ch1();
+  ch2();
+  ch3();
+  await new Promise(function(r){ setTimeout(r, 3500); });
+  log('DONE');
+  window.__R = R.join('\n');
+})();
+</script>
+</body></html>
