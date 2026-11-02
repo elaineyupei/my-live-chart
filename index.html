@@ -4186,16 +4186,19 @@ function _wishCanon(nm){
   return nm;
 }
 function _wishPost(rows, retry){
-  return fetch(SUPA_URL + '/rest/v1/wishes?on_conflict=gen_id,song', {
+  /* 注意：不能用 ?on_conflict=… + resolution=ignore-duplicates ——
+     那會讓 PostgREST 讀回衝突行，觸發 SELECT 權限（RLS 沒給），結果 42501。
+     改由唯一索引 (gen_id,song) 直接擋：重試撞上時返回 409，等同「已寫入」，算成功。 */
+  return fetch(SUPA_URL + '/rest/v1/wishes', {
     method: 'POST',
     headers: {
       'apikey': SUPA_KEY,                                  /* 公開 key，權限由 RLS 兜 */
       'Content-Type': 'application/json',
-      'Prefer': 'resolution=ignore-duplicates,return=minimal'
+      'Prefer': 'return=minimal'
     },
     body: JSON.stringify(rows)
   }).then(function(r){
-    if (r.ok) return true;
+    if (r.ok || r.status === 409) return true;             /* 409＝這批已在庫里，幂等 */
     if (retry){ return new Promise(function(res){ setTimeout(function(){ _wishPost(rows, false).then(res); }, 800); }); }
     tEv('wish_fail', {status: r.status});                  /* 失敗可見，便于算失敗率 */
     return false;
