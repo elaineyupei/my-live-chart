@@ -5796,9 +5796,56 @@ function flashShow(tid, date, sid){
       }
     }
   }
-  // v2.1.11：只滚一次（原实现先滚场次行、再滚曲行，同帧两次调用互相干扰）。
+  // v2.1.10：只滚一次，且落点必须避开吸顶栈（见 scrollRowToView 注释）
   //   同步执行：headless virtual-time 下 setTimeout 不可靠（不推进异步队列）
-  target.scrollIntoView({block:'center'});
+  scrollRowToView(target);
+}
+/* 吸顶栈下沿：主题卡打开时 .thead → .trow → .stabs → .srow.open-row 依次吸住。
+   只有「已吸住」的元素（rect.top 已贴到自身 sticky top ±1.5px）才算数 ——
+   还在文档流里的元素 rect 是布局位置，拿它当下沿会算出负数。 */
+function stickyCoverBottom(){
+  var nodes = document.querySelectorAll('.bar-top, .thead, .tcard.open > .trow, .tcard.open > .stabs, .srow.open-row');
+  var bottom = 0;
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i], cs = getComputedStyle(n);
+    if (cs.position !== 'sticky' && cs.position !== 'fixed') continue;
+    var st = parseFloat(cs.top); if (isNaN(st)) st = 0;
+    var r = n.getBoundingClientRect();
+    if (r.height <= 0 || r.bottom <= 0) continue;
+    if (r.top > st + 1.5) continue;
+    if (r.bottom > bottom) bottom = r.bottom;
+  }
+  return bottom;
+}
+/* 吸顶栈高度（与滚动位置无关）：每个吸顶元素「自身 sticky top + 高度」＝它吸住后的下沿，
+   取最大值即为整条栈的厚度。用到 offsetHeight 与 computed top，故未滚动时也测得准。 */
+function stickyStackH(){
+  var nodes = document.querySelectorAll('.bar-top, .thead, .tcard.open > .trow, .tcard.open > .stabs, .srow.open-row');
+  var h = 0;
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i], cs = getComputedStyle(n);
+    if (cs.position !== 'sticky' && cs.position !== 'fixed') continue;
+    var st = parseFloat(cs.top); if (isNaN(st)) st = 0;
+    var b = st + n.offsetHeight;
+    if (b > h) h = b;
+  }
+  return h;
+}
+/* v2.1.10：把目标行滚到「吸顶栈下沿 + 可用区上 22%」。
+   ⚠ 不用 scrollIntoView({block:'center'})，两个坑都是实测出来的：
+     ① 页面滚动余量不足时它**静默降级**（能滚多少滚多少），目标行留在下缘；
+     ② 视口偏矮时「视口中心」本身就落在吸顶栈里，目标行被吸顶的场次行盖住，
+        用户看到的是它**下面那一首** —— 2026-11-22 站长截图实测（1080×720 可稳定复现）。 */
+function scrollRowToView(el){
+  var maxY = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+  var stack = stickyStackH();
+  var avail = Math.max(80, innerHeight - stack);
+  var absTop = el.getBoundingClientRect().top + (window.pageYOffset || 0);
+  var y = Math.min(maxY, Math.max(0, absTop - stack - avail * 0.22));
+  window.scrollTo(0, y);
+  // 二段校正（防御：首帧读不到吸顶高度时，按实际下沿回推，保证不压在栈里）
+  var gap = el.getBoundingClientRect().top - stickyCoverBottom();
+  if (gap < 12) window.scrollTo(0, Math.max(0, Math.min(maxY, y + gap - 12)));
 }
 function renderThemes(rebuildFilter){
   const u = UI[lang], D = _dash();
